@@ -281,7 +281,8 @@
 
 @media (max-width: 768px) {
   .heading-xl {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
+    margin-bottom: 24px;
   }
   .table-pagination-footer {
     flex-direction: column;
@@ -291,6 +292,113 @@
   .pagination-controls {
     width: 100%;
     justify-content: space-between;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  
+  /* Responsive Table Card Conversions */
+  .bento-card {
+    padding: 20px;
+  }
+  
+  .links-table, 
+  .links-table thead, 
+  .links-table tbody, 
+  .links-table th, 
+  .links-table td, 
+  .links-table tr {
+    display: block;
+    width: 100%;
+  }
+  
+  .links-table thead {
+    display: none; /* Hide header row */
+  }
+  
+  .links-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #fafafa;
+    box-sizing: border-box;
+  }
+  
+  .links-table td {
+    padding: 8px 0;
+    border-bottom: none;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .links-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  .short-link-cell {
+    font-size: 15px;
+  }
+  
+  .original-url-cell {
+    max-width: 180px; /* Force truncation on mobile */
+    text-align: right;
+  }
+  
+  .actions-cell {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 576px) {
+  .heading-xl {
+    font-size: 1.8rem; /* Fit phone screens neatly */
+    line-height: 1.25;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .table-search-box {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Stacking URL input and button */
+  .input-console {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 8px;
+  }
+  
+  .console-icon {
+    display: none;
+  }
+  
+  .console-input {
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .console-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 20px;
   }
 }
 

@@ -75,10 +75,10 @@
         </thead>
         <tbody>
           <tr *ngFor="let item of paginatedUrls()">
-            <td class="short-link-cell">short.en/{{ item.short_key }}</td>
-            <td class="original-url-cell" title="{{ item.long_url }}">{{ item.long_url }}</td>
-            <td class="date-cell">{{ item.created_at | date:'MMM d, yyyy' }}</td>
-            <td class="actions-cell">
+            <td class="short-link-cell" data-label="Short Link">short.en/{{ item.short_key }}</td>
+            <td class="original-url-cell" data-label="Original URL" title="{{ item.long_url }}">{{ item.long_url }}</td>
+            <td class="date-cell" data-label="Date">{{ item.created_at | date:'MMM d, yyyy' }}</td>
+            <td class="actions-cell" data-label="Actions">
               <button class="action-btn copy-btn" (click)="copyToClipboard(item.short_key)" title="Copy Link">
                 <mat-icon>content_copy</mat-icon>
               </button>
