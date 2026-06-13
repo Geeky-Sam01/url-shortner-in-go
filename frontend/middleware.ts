@@ -1,5 +1,11 @@
 import { Redis } from '@upstash/redis';
 
+declare const process: {
+  env: {
+    [key: string]: string | undefined;
+  };
+};
+
 export const config = {
   matcher: [
     '/((?!api|_next/static|_next/image|favicon.ico|assets|styles.css|main.js|polyfills.js).{6,15})',
