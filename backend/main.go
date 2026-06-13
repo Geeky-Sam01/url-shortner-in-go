@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -73,7 +78,6 @@ func main() {
 	// 4. Start Analytics Worker
 	analyticsWorker := worker.NewAnalyticsWorker(database, redisClient)
 	analyticsWorker.Start()
-	defer analyticsWorker.Stop()
 
 	// 5. Setup Gin Router
 	if os.Getenv("ENV") == "production" {
@@ -121,9 +125,37 @@ func main() {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 6. Start Server
-	slog.Info("starting server", "port", cfg.Port)
-	if err := router.Run(":" + cfg.Port); err != nil {
-		slog.Error("server crashed", "error", err)
-		os.Exit(1)
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
 	}
+
+	go func() {
+		slog.Info("starting server", "port", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server crashed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("shutting down server...")
+
+	// 5 seconds timeout to shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("server forced to shutdown", "error", err)
+	} else {
+		slog.Info("server gracefully stopped")
+	}
+
+	slog.Info("stopping background analytics worker...")
+	analyticsWorker.Stop()
+
+	slog.Info("server exiting")
 }

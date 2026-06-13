@@ -117,3 +117,70 @@ func TestRedirectFallback(t *testing.T) {
 		t.Errorf("expected analytics event in queue")
 	}
 }
+
+func TestCreateURL_SelfReferential(t *testing.T) {
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	router, _, _ := setupTestRouter(nil, rClient)
+
+	t.Run("API Host Check", func(t *testing.T) {
+		reqBody := `{"url": "http://localhost:8080/abc"}`
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Host = "localhost:8080"
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("Frontend Host Check", func(t *testing.T) {
+		reqBody := `{"url": "http://localhost:4200/dashboard"}`
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCreateURL_RateLimit(t *testing.T) {
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	router, _, _ := setupTestRouter(nil, rClient)
+
+	// Make 10 requests, all should get 400 Bad Request (not 429)
+	for i := 0; i < 10; i++ {
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(`invalid json`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("unexpected rate limit hit at request %d", i+1)
+		}
+	}
+
+	// 11th request should get 429 Too Many Requests
+	req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(`invalid json`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429 Too Many Requests on 11th request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+

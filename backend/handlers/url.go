@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -43,6 +44,14 @@ type URLHandler struct {
 	FrontendURL string
 }
 
+var rateLimitScript = redis.NewScript(`
+	local count = redis.call("INCR", KEYS[1])
+	if count == 1 then
+		redis.call("EXPIRE", KEYS[1], ARGV[1])
+	end
+	return count
+`)
+
 // CreateURL handles POST /api/shorten
 // @Summary      Create a shortened URL
 // @Description  Accepts a long URL, validates the schema, generates a unique Base62 key, and stores it in the database and cache.
@@ -56,23 +65,21 @@ type URLHandler struct {
 // @Failure      500  {object}  map[string]string "Internal Server Error"
 // @Router       /api/shorten [post]
 func (h *URLHandler) CreateURL(c *gin.Context) {
-	// IP-based Rate Limiting
+	// IP-based Rate Limiting (Atomic Lua script)
 	ip := c.ClientIP()
 	rateLimitKey := "rate_limit:shorten:" + ip
 	
-	count, err := h.Redis.Incr(c.Request.Context(), rateLimitKey).Result()
+	count, err := rateLimitScript.Run(c.Request.Context(), h.Redis, []string{rateLimitKey}, 60).Int64()
 	if err != nil {
 		slog.Error("redis rate limit error", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
-	if count == 1 {
-		h.Redis.Expire(c.Request.Context(), rateLimitKey, time.Minute)
-	}
 	if count > 10 {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too Many Requests"})
 		return
 	}
+
 
 	var req ShortenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -83,6 +90,26 @@ func (h *URLHandler) CreateURL(c *gin.Context) {
 	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "URL must start with http:// or https://"})
 		return
+	}
+
+	// Prevent self-referential URL shortening
+	parsedURL, err := url.Parse(req.URL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL format"})
+		return
+	}
+	inputHost := strings.ToLower(parsedURL.Host)
+	if inputHost == strings.ToLower(c.Request.Host) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot shorten URLs pointing to this service"})
+		return
+	}
+	if h.FrontendURL != "" {
+		if parsedFrontend, err := url.Parse(h.FrontendURL); err == nil {
+			if inputHost == strings.ToLower(parsedFrontend.Host) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot shorten URLs pointing to this service"})
+				return
+			}
+		}
 	}
 
 	// 1. Insert into DB to generate the sequential ID.

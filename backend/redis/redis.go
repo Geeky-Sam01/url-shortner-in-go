@@ -136,3 +136,17 @@ func PopAnalyticsEvents(ctx context.Context, client *redis.Client, count int64) 
 
 	return results, nil
 }
+
+// RequeueAnalyticsEvents puts events back at the tail of the queue (RPush) in a pipeline.
+func RequeueAnalyticsEvents(ctx context.Context, client *redis.Client, events []string) error {
+	if len(events) == 0 {
+		return nil
+	}
+	pipe := client.Pipeline()
+	for _, event := range events {
+		pipe.RPush(ctx, analyticsQueueKey, event)
+	}
+	_, err := pipe.Exec(ctx)
+	return err
+}
+

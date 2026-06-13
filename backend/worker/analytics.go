@@ -78,6 +78,7 @@ func (w *AnalyticsWorker) processBatch() {
 	tx, err := w.DB.BeginTx(ctx, nil)
 	if err != nil {
 		slog.Error("analytics worker: failed to begin tx", "error", err)
+		w.requeueEvents(ctx, eventsJSON)
 		return
 	}
 	defer tx.Rollback()
@@ -87,6 +88,7 @@ func (w *AnalyticsWorker) processBatch() {
 		VALUES ((SELECT id FROM urls WHERE short_key = $1), $1, $2, $3, $4, $5, $6)`)
 	if err != nil {
 		slog.Error("analytics worker: failed to prepare stmt", "error", err)
+		w.requeueEvents(ctx, eventsJSON)
 		return
 	}
 	defer stmt.Close()
@@ -107,7 +109,16 @@ func (w *AnalyticsWorker) processBatch() {
 
 	if err := tx.Commit(); err != nil {
 		slog.Error("analytics worker: failed to commit tx", "error", err)
+		w.requeueEvents(ctx, eventsJSON)
 	} else {
 		slog.Info("analytics worker: batch processed", "count", len(eventsJSON))
 	}
 }
+
+func (w *AnalyticsWorker) requeueEvents(ctx context.Context, events []string) {
+	slog.Warn("analytics worker: requeueing events due to database batch insert failure", "count", len(events))
+	if err := myredis.RequeueAnalyticsEvents(ctx, w.Redis, events); err != nil {
+		slog.Error("analytics worker: failed to requeue events to redis", "error", err)
+	}
+}
+
