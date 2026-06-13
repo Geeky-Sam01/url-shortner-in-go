@@ -1,6 +1,9 @@
 import { Routes } from '@angular/router';
-import { AppComponent } from './app.component';
+import { DashboardComponent } from './dashboard/dashboard.component';
+import { AnalyticsComponent } from './analytics/analytics.component';
 
 export const routes: Routes = [
-  { path: '', component: AppComponent }
+  { path: '', component: DashboardComponent },
+  { path: 'analytics', component: AnalyticsComponent },
+  { path: '**', redirectTo: '' }
 ];

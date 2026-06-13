@@ -1,0 +1,131 @@
+<div class="hero-section">
+  <h1 class="heading-xl">Make your links shorter,<br/><span class="highlight">faster</span>, smarter.</h1>
+  
+  <!-- Input Wrapper -->
+  <div class="input-console-wrapper">
+    <div class="input-console" [class.focused]="isFocused()">
+      <mat-icon class="console-icon">link</mat-icon>
+      <input 
+        class="console-input" 
+        [ngModel]="longUrl()"
+        (ngModelChange)="longUrl.set($event)"
+        (focus)="isFocused.set(true)"
+        (blur)="isFocused.set(false)"
+        (keyup.enter)="shorten()"
+        placeholder="Paste your long URL here..." 
+      />
+      <button 
+        class="console-btn" 
+        [disabled]="!longUrl() || loading()" 
+        [class.shimmer-loading]="loading()"
+        (click)="shorten()">
+        <span class="btn-text">{{ loading() ? 'Generating...' : 'Shorten Link' }}</span>
+        <mat-icon class="btn-icon">auto_awesome</mat-icon>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Dynamic Shortened Result Pill -->
+  <div class="result-pill-container" *ngIf="latestShortenedUrl()">
+    <div class="result-pill">
+      <span class="result-url">{{ latestShortenedUrl() }}</span>
+      <div class="pill-actions">
+        <button class="pill-action-btn" (click)="copyToClipboard(latestShortenedUrl()!)" title="Copy Link">
+          <mat-icon>content_copy</mat-icon>
+        </button>
+        <button class="pill-action-btn" (click)="navigateToUrl(latestShortenedUrl()!)" title="Visit Link">
+          <mat-icon>open_in_new</mat-icon>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p class="subtitle">Join 10k+ professionals shortening links with precision.</p>
+</div>
+
+<!-- Dashboard Main Content: Recent Links -->
+<div class="dashboard-content">
+  <div class="bento-card left-card">
+    <div class="card-header">
+      <h2 class="card-title">
+        <mat-icon class="card-header-icon">history</mat-icon>
+        Recent Links
+      </h2>
+      <div class="table-search-box">
+        <mat-icon class="table-search-icon">search</mat-icon>
+        <input 
+          type="text" 
+          [ngModel]="searchText()" 
+          (ngModelChange)="onSearchChange($event)"
+          placeholder="Search links..." 
+          class="table-search-input"
+        />
+      </div>
+    </div>
+    
+    <div class="links-table-container">
+      <table class="links-table" *ngIf="filteredUrls().length > 0; else emptyState">
+        <thead>
+          <tr>
+            <th>SHORT LINK</th>
+            <th>ORIGINAL URL</th>
+            <th>DATE</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of paginatedUrls()">
+            <td class="short-link-cell">short.en/{{ item.short_key }}</td>
+            <td class="original-url-cell" title="{{ item.long_url }}">{{ item.long_url }}</td>
+            <td class="date-cell">{{ item.created_at | date:'MMM d, yyyy' }}</td>
+            <td class="actions-cell">
+              <button class="action-btn copy-btn" (click)="copyToClipboard(item.short_key)" title="Copy Link">
+                <mat-icon>content_copy</mat-icon>
+              </button>
+              <button class="action-btn navigate-btn" (click)="navigateToUrl(item.short_key)" title="Navigate">
+                <mat-icon>open_in_new</mat-icon>
+              </button>
+              <button class="action-btn delete-btn" (click)="deleteUrl(item.short_key)" title="Delete Link">
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Pagination Footer -->
+      <div class="table-pagination-footer" *ngIf="filteredUrls().length > 0">
+        <div class="pagination-info">
+          Showing {{ entryStart() }} to {{ entryEnd() }} of {{ filteredUrls().length }} entries
+        </div>
+        <div class="pagination-controls">
+          <div class="page-size-selector">
+            <span>Show</span>
+            <select [ngModel]="pageSize()" (ngModelChange)="onPageSizeChange($event)" class="page-size-select">
+              <option [value]="10">10</option>
+              <option [value]="20">20</option>
+              <option [value]="50">50</option>
+              <option [value]="100">100</option>
+            </select>
+            <span>entries</span>
+          </div>
+          <div class="pagination-buttons">
+            <button class="pagination-btn" [disabled]="currentPage() === 1" (click)="goToPage(currentPage() - 1)" title="Previous Page">
+              <mat-icon>chevron_left</mat-icon>
+            </button>
+            <span class="page-indicator">Page {{ currentPage() }} of {{ totalPages() }}</span>
+            <button class="pagination-btn" [disabled]="currentPage() === totalPages()" (click)="goToPage(currentPage() + 1)" title="Next Page">
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <ng-template #emptyState>
+        <div class="empty-state">
+          <p>{{ searchText() ? 'No links match your search query.' : 'No links shortened yet. Paste a link above to get started!' }}</p>
+        </div>
+      </ng-template>
+    </div>
+  </div>
+</div>
