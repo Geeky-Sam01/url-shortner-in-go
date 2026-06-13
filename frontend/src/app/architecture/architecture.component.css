@@ -1,0 +1,100 @@
+.architecture-header {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.heading-xl {
+  font-size: 3.5rem;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-top: 12px;
+}
+
+.stepper-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding-bottom: 60px;
+}
+
+/* Material Stepper Overrides */
+::ng-deep .mat-vertical-stepper-header {
+  padding: 24px 8px !important;
+}
+
+::ng-deep .mat-step-label {
+  font-family: var(--font-family) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+::ng-deep .mat-step-icon {
+  background-color: var(--text-primary) !important;
+  color: white !important;
+}
+
+/* Card layout */
+.arch-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin: 16px 0;
+  background: var(--bg-card);
+}
+
+.desc-para {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.scale-points {
+  padding-left: 20px;
+  margin-bottom: 24px;
+}
+
+.scale-points li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.scale-points li strong {
+  color: var(--text-primary);
+}
+
+/* SVG Rendering */
+.svg-container {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background: #fafafa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.arch-svg {
+  max-height: 240px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .heading-xl {
+    font-size: 2.5rem;
+  }
+  .arch-card {
+    padding: 16px;
+  }
+}
