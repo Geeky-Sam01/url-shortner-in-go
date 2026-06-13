@@ -6,64 +6,92 @@
 </header>
 
 <div class="container">
-  <div class="glass-card form-card">
-    <h1 class="card-heading">Shorten a Long Link</h1>
-    <p class="card-subheading">Paste your link below to create a highly optimized, edge-redirected short link.</p>
+  
+  <!-- Interactive Glass Hero Fold -->
+  <div class="hero-section">
+    <h1 class="heading-xl text-gradient">Make your links shorter,<br/>faster, smarter.</h1>
+    <p class="subtitle">Paste your link below to create a highly optimized, edge-redirected short link.</p>
     
-    <div class="input-group">
-      <div class="custom-input-wrapper">
-        <mat-icon class="input-icon">link</mat-icon>
-        <input class="custom-input" [(ngModel)]="longUrl" placeholder="Paste your long URL here (http:// or https://)..." />
+    <!-- Dynamic Input Console -->
+    <div class="input-console-wrapper glass-panel">
+      <div class="input-glow-backlight" [class.active]="isFocused"></div>
+      <div class="input-console">
+        <mat-icon class="console-icon">link</mat-icon>
+        <input 
+          class="console-input" 
+          [(ngModel)]="longUrl" 
+          (focus)="isFocused = true"
+          (blur)="isFocused = false"
+          (keyup.enter)="shorten()"
+          placeholder="Paste your long URL here (http:// or https://)..." 
+        />
+        <button 
+          class="console-btn" 
+          [disabled]="!longUrl || loading" 
+          [class.glow-animation]="loading"
+          (click)="shorten()">
+          <span>{{ loading ? 'Creating...' : 'Shorten' }}</span>
+          <mat-icon>arrow_forward</mat-icon>
+        </button>
       </div>
-      <button class="custom-btn" [disabled]="!longUrl || loading" (click)="shorten()">
-        <span>{{ loading ? 'Shortening...' : 'Shorten Link' }}</span>
-        <mat-icon>arrow_forward</mat-icon>
-      </button>
     </div>
   </div>
 
-  <div class="glass-card table-card" *ngIf="recentUrls.length > 0">
-    <div class="table-header">
-      <h2 class="card-heading">Recent Links</h2>
-      <span class="count-badge">{{ recentUrls.length }} generated</span>
-    </div>
+  <!-- Bento Grid Presentation -->
+  <div class="bento-grid" *ngIf="recentUrls.length > 0">
     
-    <div class="table-wrapper">
-      <table mat-table [dataSource]="recentUrls" class="custom-table">
-        
-        <ng-container matColumnDef="short_key">
-          <th mat-header-cell *matHeaderCellDef> Short Key </th>
-          <td mat-cell *matCellDef="let element" class="short-key-cell"> 
-            <span class="short-link-prefix">short.ly/</span>{{element.short_key}} 
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="long_url">
-          <th mat-header-cell *matHeaderCellDef> Original URL </th>
-          <td mat-cell *matCellDef="let element" class="long-url-cell"> {{element.long_url}} </td>
-        </ng-container>
-
-        <ng-container matColumnDef="created_at">
-          <th mat-header-cell *matHeaderCellDef> Date </th>
-          <td mat-cell *matCellDef="let element" class="date-cell"> {{element.created_at | date:'MMM d, h:mm a'}} </td>
-        </ng-container>
-
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef> Actions </th>
-          <td mat-cell *matCellDef="let element" class="actions-cell">
-            <button mat-icon-button class="action-btn copy" (click)="copyToClipboard(element.short_key)" title="Copy Link">
+    <!-- Left Bento Card (Recent Links) -->
+    <div class="bento-card glass-panel left-card">
+      <div class="card-header">
+        <h2 class="heading-md">Recent Links</h2>
+        <span class="count-badge">{{ recentUrls.length }} generated</span>
+      </div>
+      
+      <div class="links-list">
+        <div class="link-card glass-panel" *ngFor="let element of recentUrls">
+          <div class="link-details">
+            <div class="short-link-row">
+              <span class="short-link-prefix">short.ly/</span>
+              <span class="short-key">{{ element.short_key }}</span>
+            </div>
+            <div class="long-link-row" title="{{ element.long_url }}">{{ element.long_url }}</div>
+            <div class="date-badge">{{ element.created_at | date:'MMM d, h:mm a' }}</div>
+          </div>
+          <div class="link-actions">
+            <button class="action-bubble copy" (click)="copyToClipboard(element.short_key)" title="Copy Link">
               <mat-icon>content_copy</mat-icon>
             </button>
-            <button mat-icon-button class="action-btn delete" (click)="deleteUrl(element.short_key)" title="Delete Link">
-              <mat-icon>delete</mat-icon>
+            <button class="action-bubble delete" (click)="deleteUrl(element.short_key)" title="Delete Link">
+              <mat-icon>delete_outline</mat-icon>
             </button>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-      </table>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Right Bento Card (Analytics Placeholder) -->
+    <div class="bento-card glass-panel right-card">
+      <div class="card-header">
+        <h2 class="heading-md">Quick Analytics</h2>
+        <span class="badge pro-badge">Pro</span>
+      </div>
+      
+      <div class="analytics-mockup">
+        <div class="stat-box glass-panel">
+          <div class="stat-label">Total Clicks</div>
+          <div class="stat-value text-gradient">24.5k</div>
+          <div class="sparkline-mock"></div>
+        </div>
+        
+        <div class="stat-box glass-panel">
+          <div class="stat-label">Top Location</div>
+          <div class="stat-value">United States</div>
+          <div class="progress-bar-mock">
+            <div class="progress-fill" style="width: 78%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
-

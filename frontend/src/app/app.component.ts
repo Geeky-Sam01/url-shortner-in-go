@@ -36,6 +36,7 @@ export class AppComponent implements OnInit {
 
   longUrl = '';
   loading = false;
+  isFocused = false;
   recentUrls: UrlItem[] = [];
   displayedColumns: string[] = ['short_key', 'long_url', 'created_at', 'actions'];
 
