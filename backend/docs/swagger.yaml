@@ -1,0 +1,119 @@
+basePath: /
+definitions:
+  handlers.ShortenRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  handlers.ShortenResponse:
+    properties:
+      short_key:
+        type: string
+      short_url:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: A highly scalable, resume-worthy URL shortener with edge-redirection
+    and analytics.
+  title: High-Performance URL Shortener API
+  version: "1.0"
+paths:
+  /{key}:
+    get:
+      description: Queries the cache and database for the redirect target. If found,
+        logs a click analytics event asynchronously and redirects the user with HTTP
+        302.
+      parameters:
+      - description: Base62 shortened URL key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "302":
+          description: Redirect to target destination
+        "404":
+          description: URL not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Redirect to destination URL
+      tags:
+      - Redirects
+  /api/shorten:
+    post:
+      consumes:
+      - application/json
+      description: Accepts a long URL, validates the schema, generates a unique Base62
+        key, and stores it in the database and cache.
+      parameters:
+      - description: Long URL Payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ShortenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ShortenResponse'
+        "400":
+          description: Invalid URL format or scheme
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a shortened URL
+      tags:
+      - URLs
+  /api/urls:
+    get:
+      description: Fetches the 50 most recently created shortened URLs from the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get recent shortened URLs
+      tags:
+      - URLs
+swagger: "2.0"
