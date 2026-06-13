@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://url-shortener-backend.up.railway.app/api' // placeholder
+  apiUrl: 'https://url-shortner-in-go.onrender.com/api'
 };
