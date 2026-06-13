@@ -25,7 +25,7 @@ export default async function middleware(request: Request) {
 
   // If it doesn't look like our base62 key, skip
   if (!/^[0-9a-zA-Z]{6,15}$/.test(key)) {
-    return Response.redirect(url.origin + '/', 302); // Let angular handle or redirect
+    return; // Let angular handle
   }
 
   try {
