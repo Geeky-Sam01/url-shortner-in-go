@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -43,9 +44,10 @@ type AnalyticsEvent struct {
 
 // URLHandler handles all URL-related requests.
 type URLHandler struct {
-	DB          *sql.DB
-	Redis       *redis.Client
-	FrontendURL string
+	DB                  *sql.DB
+	Redis               *redis.Client
+	FrontendURL         string
+	AnalyticsBufferChan chan AnalyticsEvent
 }
 
 var rateLimitScript = redis.NewScript(`
@@ -90,11 +92,9 @@ func (h *URLHandler) CreateURL(c *gin.Context) {
 	limit := 10
 	count, err := rateLimitScript.Run(c.Request.Context(), h.Redis, []string{rateLimitKey}, now, window, limit).Int64()
 	if err != nil {
-		slog.Error("redis rate limit error", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-		return
-	}
-	if count > int64(limit) {
+		// Soft-fail: log warning and bypass rate limit check if Redis has error (e.g. quota exceeded or connection issue)
+		slog.Warn("redis rate limit check failed (bypassing rate limit check)", "error", err, "ip", ip)
+	} else if count > int64(limit) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too Many Requests"})
 		return
 	}
@@ -286,7 +286,7 @@ func (h *URLHandler) RedirectFallback(c *gin.Context) {
 		}
 	}
 
-	// 3. Queue Analytics Event
+	// 3. Queue Analytics Event in local buffer channel
 	event := AnalyticsEvent{
 		ShortKey:  key,
 		Referrer:  c.Request.Header.Get("Referer"),
@@ -295,10 +295,11 @@ func (h *URLHandler) RedirectFallback(c *gin.Context) {
 		Country:   c.Request.Header.Get("CF-IPCountry"), // Cloudflare/Vercel standard
 		ClickedAt: time.Now().UTC(),
 	}
-	if eventBytes, err := json.Marshal(event); err == nil {
-		if err := myredis.PushAnalyticsEvent(c.Request.Context(), h.Redis, string(eventBytes)); err != nil {
-			slog.Warn("failed to push analytics event", "error", err)
-		}
+	select {
+	case h.AnalyticsBufferChan <- event:
+		// Queued in local memory buffer
+	default:
+		slog.Warn("analytics local buffer queue is full, dropping event", "key", key)
 	}
 
 	// 4. Redirect
@@ -461,5 +462,102 @@ func isSSRFOrSelfReferential(targetURL string, apiHost string, frontendURL strin
 		}
 	}
 	return false
+}
+
+// StartLocalBufferWorker runs a background worker that drains the AnalyticsBufferChan and flushes events.
+func (h *URLHandler) StartLocalBufferWorker(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		var buffer []AnalyticsEvent
+		flush := func() {
+			if len(buffer) == 0 {
+				return
+			}
+			h.flushAnalyticsBatch(buffer)
+			buffer = nil
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				flush()
+				return
+			case event, ok := <-h.AnalyticsBufferChan:
+				if !ok {
+					flush()
+					return
+				}
+				buffer = append(buffer, event)
+				if len(buffer) >= 100 {
+					flush()
+				}
+			case <-ticker.C:
+				flush()
+			}
+		}
+	}()
+}
+
+// flushAnalyticsBatch attempts to write the analytics events to Redis (if >= 100) or directly to PostgreSQL.
+func (h *URLHandler) flushAnalyticsBatch(events []AnalyticsEvent) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// High Traffic: If we have at least 100 events, try to push to Redis first
+	if len(events) >= 100 {
+		var eventStrings []string
+		for _, e := range events {
+			if b, err := json.Marshal(e); err == nil {
+				eventStrings = append(eventStrings, string(b))
+			}
+		}
+		if len(eventStrings) > 0 {
+			// Push to Redis in a single command using LPUSH
+			pipe := h.Redis.Pipeline()
+			var vals []interface{}
+			for _, s := range eventStrings {
+				vals = append(vals, s)
+			}
+			pipe.LPush(ctx, "analytics:queue", vals...)
+			_, err := pipe.Exec(ctx)
+			if err == nil {
+				slog.Info("local buffer: flushed batch of events to redis", "count", len(eventStrings))
+				return
+			}
+			slog.Warn("local buffer: failed to flush batch to redis, falling back to direct postgres insert", "error", err)
+		}
+	}
+
+	// Fallback or Low Traffic (< 100 events): Write directly to PostgreSQL
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		slog.Error("local buffer: failed to begin tx for fallback insert", "error", err)
+		return
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO clicks (url_id, short_key, referrer, user_agent, ip_address, country, clicked_at)
+		VALUES ((SELECT id FROM urls WHERE short_key = $1), $1, $2, $3, $4, $5, $6)`)
+	if err != nil {
+		slog.Error("local buffer: failed to prepare stmt for fallback insert", "error", err)
+		return
+	}
+	defer stmt.Close()
+
+	for _, event := range events {
+		_, err = stmt.ExecContext(ctx, event.ShortKey, event.Referrer, event.UserAgent, event.IPAddress, event.Country, event.ClickedAt)
+		if err != nil {
+			slog.Warn("local buffer: failed to insert event directly", "error", err, "short_key", event.ShortKey)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("local buffer: failed to commit tx for fallback insert", "error", err)
+	} else {
+		slog.Info("local buffer: batch written to postgres", "count", len(events))
+	}
 }
 

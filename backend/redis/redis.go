@@ -106,22 +106,37 @@ func PushAnalyticsEvent(ctx context.Context, client *redis.Client, eventJSON str
 //
 // Returns an empty slice (not an error) when the queue is empty.
 func PopAnalyticsEvents(ctx context.Context, client *redis.Client, count int64) ([]string, error) {
+	// First check the length of the queue to save Redis command quota on empty queues.
+	llen, err := client.LLen(ctx, analyticsQueueKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("redis: llen failed: %w", err)
+	}
+	if llen == 0 {
+		return nil, nil
+	}
+
+	// Only pop up to the actual number of elements present, capped at count
+	popCount := count
+	if llen < popCount {
+		popCount = llen
+	}
+
 	pipe := client.Pipeline()
 
-	// Queue up `count` RPOPs in a single round-trip.
-	cmds := make([]*redis.StringCmd, count)
-	for i := int64(0); i < count; i++ {
+	// Queue up popCount RPOPs in a single round-trip.
+	cmds := make([]*redis.StringCmd, popCount)
+	for i := int64(0); i < popCount; i++ {
 		cmds[i] = pipe.RPop(ctx, analyticsQueueKey)
 	}
 
 	// Exec sends all commands at once. Individual commands may return
 	// redis.Nil when the list is exhausted — that's expected, not an error.
-	_, err := pipe.Exec(ctx)
+	_, err = pipe.Exec(ctx)
 	if err != nil && err != redis.Nil {
 		return nil, fmt.Errorf("redis: pipeline exec failed: %w", err)
 	}
 
-	results := make([]string, 0, count)
+	results := make([]string, 0, popCount)
 	for _, cmd := range cmds {
 		val, err := cmd.Result()
 		if err == redis.Nil {

@@ -22,9 +22,10 @@ func setupTestRouter(rClient *redis.Client) (*gin.Engine, *handlers.URLHandler, 
 
 	mockDB, mock, _ := sqlmock.New()
 	handler := &handlers.URLHandler{
-		DB:          mockDB,
-		Redis:       rClient,
-		FrontendURL: "http://localhost:4200",
+		DB:                  mockDB,
+		Redis:               rClient,
+		FrontendURL:         "http://localhost:4200",
+		AnalyticsBufferChan: make(chan handlers.AnalyticsEvent, 100),
 	}
 
 	router.POST("/api/shorten", handler.CreateURL)
@@ -83,7 +84,7 @@ func TestRedirectFallback(t *testing.T) {
 	defer mr.Close()
 	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	router, _, mock := setupTestRouter(rClient)
+	router, handler, mock := setupTestRouter(rClient)
 
 	// Test case 1: Cache miss, DB hit
 	shortKey := "abc1234"
@@ -111,10 +112,14 @@ func TestRedirectFallback(t *testing.T) {
 		t.Errorf("expected cache to be set to %s, got %s", longURL, val)
 	}
 
-	// Verify analytics event was queued
-	list, _ := mr.Lpop("analytics:queue")
-	if list == "" {
-		t.Errorf("expected analytics event in queue")
+	// Verify analytics event was queued locally
+	select {
+	case event := <-handler.AnalyticsBufferChan:
+		if event.ShortKey != shortKey {
+			t.Errorf("expected event for key %s, got %s", shortKey, event.ShortKey)
+		}
+	default:
+		t.Errorf("expected analytics event in local buffer queue")
 	}
 }
 
@@ -219,6 +224,28 @@ func TestCreateURL_RateLimit(t *testing.T) {
 
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("expected 429 Too Many Requests on 11th request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+func TestCreateURL_RateLimit_RedisFailure(t *testing.T) {
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	
+	// Close client to simulate database outage/failure
+	rClient.Close()
+
+	router, _, _ := setupTestRouter(rClient)
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(`invalid json`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Since Redis is down/closed, rate limit check should soft-fail.
+	// The endpoint should proceed to parse request body and fail with 400 Bad Request
+	// instead of returning 500 Internal Server Error.
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
 	}
 }
 func TestGetClientIP(t *testing.T) {

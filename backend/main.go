@@ -120,10 +120,14 @@ func main() {
 	})
 
 	urlHandler := &handlers.URLHandler{
-		DB:          database,
-		Redis:       redisClient,
-		FrontendURL: cfg.FrontendURL,
+		DB:                  database,
+		Redis:               redisClient,
+		FrontendURL:         cfg.FrontendURL,
+		AnalyticsBufferChan: make(chan handlers.AnalyticsEvent, 5000),
 	}
+
+	// Start local analytics buffer worker to batch inserts (flush every 10 seconds)
+	urlHandler.StartLocalBufferWorker(context.Background(), 10*time.Second)
 
 	// API Routes
 	api := router.Group("/api")
