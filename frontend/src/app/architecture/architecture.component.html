@@ -107,16 +107,16 @@
     </mat-step>
 
     <!-- Step 3: Asynchronous Worker -->
-    <mat-step label="Asynchronous Analytics Worker (Redis Queue Buffering)">
+    <mat-step label="Hybrid Local Buffer & Fallback Queue (Resilient Click Analytics)">
       <mat-card class="bento-card arch-card">
         <div class="card-content">
           <p class="desc-para">
-            Traditional SQL databases choke when writing analytical logs (IPs, locations, dates) under heavy traffic spikes. We use an event-driven architecture to keep redirections sub-millisecond.
+            Traditional SQL databases choke when writing analytical logs under heavy traffic, and standard Redis queues can suffer from connection failures or rate limits. We use a hybrid, multi-stage buffering strategy to keep redirections instant and avoid any data loss.
           </p>
           <ul class="scale-points">
-            <li><strong>Redis Queue Buffering:</strong> Redirection events push click data straight to a fast Redis list (acting as an in-memory queue), bypassing DB writes on the user response path.</li>
-            <li><strong>Batch flushing:</strong> A background Go worker pulls batches of events from Redis periodically and flushes them in bulk to Postgres.</li>
-            <li><strong>Isolation:</strong> Heavy read analytics (e.g., loading the Dashboard charts) do not block or lag redirections, as the SQL persistent storage is decoupled via the worker.</li>
+            <li><strong>In-Memory Buffering:</strong> Redirection events are pushed instantly into a local thread-safe Go channel (buffered up to 5,000 events). This decouples user redirects from network/database latency.</li>
+            <li><strong>Quota-Aware Redis Batching:</strong> A background worker drains the channel. Under high traffic, it pushes events to Redis in batches of 100 in a single command, reducing Redis request quota usage by 100x. Under low traffic, it bypasses Redis entirely to save request limits.</li>
+            <li><strong>Resilient Database Fallback:</strong> If Upstash Redis is rate-limited or offline, the local worker automatically falls back to batch-inserting the buffered events directly into PostgreSQL, ensuring zero data loss.</li>
           </ul>
 
           <div class="svg-container">
@@ -127,27 +127,34 @@
                 </marker>
               </defs>
               <!-- Nodes -->
-              <rect x="20" y="90" width="150" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
-              <text x="95" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Redirection Event</text>
+              <rect x="10" y="90" width="140" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+              <text x="80" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Redirection Event</text>
+              
+              <rect x="210" y="90" width="150" height="60" rx="8" fill="#F4F4F5" stroke="#1A1A1A" stroke-dasharray="4,4" stroke-width="2"/>
+              <text x="285" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Local Go Channel</text>
 
-              <rect x="240" y="90" width="150" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
-              <text x="315" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Redis Queue</text>
+              <rect x="430" y="30" width="150" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+              <text x="505" y="65" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Redis Queue</text>
 
-              <rect x="460" y="90" width="160" height="60" rx="8" fill="#F4F4F5" stroke="#1A1A1A" stroke-width="2"/>
-              <text x="540" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Analytics Worker</text>
+              <rect x="660" y="30" width="130" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+              <text x="725" y="65" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Analytics Worker</text>
 
-              <rect x="680" y="90" width="100" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
-              <text x="730" y="125" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Postgres DB</text>
+              <rect x="540" y="150" width="150" height="60" rx="8" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="2"/>
+              <text x="615" y="185" font-family="Space Grotesk, sans-serif" font-size="13" font-weight="bold" text-anchor="middle" fill="#1A1A1A">Postgres DB</text>
 
               <!-- Connectors -->
-              <path d="M 170 120 L 230 120" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
-              <path d="M 390 120 L 450 120" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
-              <path d="M 620 120 L 670 120" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
+              <path d="M 150 120 L 200 120" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
+              <path d="M 360 110 L 420 70" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
+              <path d="M 340 150 L 530 180" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
+              <path d="M 580 60 L 650 60" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
+              <path d="M 725 90 L 630 145" stroke="#1A1A1A" stroke-width="2" marker-end="url(#arrow3)"/>
 
               <!-- Labels -->
-              <text x="200" y="112" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">1. Push</text>
-              <text x="420" y="112" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">2. Batch Poll</text>
-              <text x="645" y="112" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">3. Save</text>
+              <text x="175" y="112" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">1. Push</text>
+              <text x="390" y="80" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">2a. Batch Push (>=100)</text>
+              <text x="420" y="162" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">2b. Fallback / Low Traffic</text>
+              <text x="615" y="52" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">3. Poll</text>
+              <text x="690" y="130" font-family="Space Grotesk, sans-serif" font-size="11" text-anchor="middle" fill="#71717A">4. Batch Save</text>
             </svg>
           </div>
         </div>
