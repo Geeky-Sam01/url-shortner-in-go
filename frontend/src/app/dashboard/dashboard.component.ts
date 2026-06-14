@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, UrlItem } from '../services/api.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
+import * as QRCode from 'qrcode';
 
 @Component({
   selector: 'app-dashboard',
@@ -27,6 +28,9 @@ export class DashboardComponent implements OnInit {
   isFocused = signal(false);
   recentUrls = signal<UrlItem[]>([]);
   latestShortenedUrl = signal<string | null>(null);
+  latestShortenedQrDataUrl = signal<string | null>(null);
+  activePopupUrl = signal<string | null>(null);
+  activePopupQrDataUrl = signal<string | null>(null);
   customAlias = signal('');
   selectedTTL = signal(0);
 
@@ -103,6 +107,7 @@ export class DashboardComponent implements OnInit {
   }
 
   shorten() {
+    this.latestShortenedQrDataUrl.set(null);
     const urlVal = this.longUrl() ? this.longUrl().trim() : '';
     if (!urlVal) {
       this.snackBar.open('Please enter a URL to shorten', 'Close', { duration: 3000 });
@@ -164,6 +169,9 @@ export class DashboardComponent implements OnInit {
         this.customAlias.set('');
         this.selectedTTL.set(0);
         this.latestShortenedUrl.set(res.short_url);
+        QRCode.toDataURL(res.short_url, { margin: 2, width: 256 })
+          .then(url => this.latestShortenedQrDataUrl.set(url))
+          .catch(err => console.error('Failed to generate QR', err));
         this.loadUrls();
         this.snackBar.open(`Shortened to: ${res.short_url}`, 'Close', { duration: 5000 });
         this.loading.set(false);
@@ -201,6 +209,7 @@ export class DashboardComponent implements OnInit {
         const latest = this.latestShortenedUrl();
         if (latest && latest.endsWith('/' + shortKey)) {
           this.latestShortenedUrl.set(null);
+          this.latestShortenedQrDataUrl.set(null);
         }
         this.snackBar.open('URL deleted successfully', 'Close', { duration: 2000 });
       },
@@ -209,5 +218,25 @@ export class DashboardComponent implements OnInit {
         console.error(err);
       }
     });
+  }
+
+  openQrPopup(shortKey: string) {
+    const fullUrl = `${this.document.location.origin}/${shortKey}`;
+    this.activePopupUrl.set(fullUrl);
+    QRCode.toDataURL(fullUrl, { margin: 2, width: 256 })
+      .then(url => this.activePopupQrDataUrl.set(url))
+      .catch(err => console.error('Failed to generate QR', err));
+  }
+
+  closeQrPopup() {
+    this.activePopupUrl.set(null);
+    this.activePopupQrDataUrl.set(null);
+  }
+
+  downloadQrCode(dataUrl: string, filename: string) {
+    const link = this.document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    link.click();
   }
 }

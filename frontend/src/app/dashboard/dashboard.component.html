@@ -54,15 +54,31 @@
   
   <!-- Dynamic Shortened Result Pill -->
   <div class="result-pill-container" *ngIf="latestShortenedUrl()">
-    <div class="result-pill">
-      <span class="result-url">{{ latestShortenedUrl() }}</span>
-      <div class="pill-actions">
-        <button class="pill-action-btn" (click)="copyToClipboard(latestShortenedUrl()!)" title="Copy Link">
-          <mat-icon>content_copy</mat-icon>
-        </button>
-        <button class="pill-action-btn" (click)="navigateToUrl(latestShortenedUrl()!)" title="Visit Link">
-          <mat-icon>open_in_new</mat-icon>
-        </button>
+    <div style="display: flex; flex-direction: column; width: 100%; gap: 12px; align-items: center;">
+      <div class="result-pill">
+        <span class="result-url">{{ latestShortenedUrl() }}</span>
+        <div class="pill-actions">
+          <button class="pill-action-btn" (click)="copyToClipboard(latestShortenedUrl()!)" title="Copy Link">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+          <button class="pill-action-btn" (click)="navigateToUrl(latestShortenedUrl()!)" title="Visit Link">
+            <mat-icon>open_in_new</mat-icon>
+          </button>
+        </div>
+      </div>
+      
+      <!-- QR code success card -->
+      <div class="qr-result-card" *ngIf="latestShortenedQrDataUrl()">
+        <div class="qr-wrapper">
+          <img [src]="latestShortenedQrDataUrl()" alt="QR Code" class="qr-image" />
+        </div>
+        <div class="qr-info">
+          <span class="qr-title">Scan QR Code</span>
+          <span class="qr-desc">Scan to easily visit the link on mobile</span>
+          <button class="download-qr-btn" (click)="downloadQrCode(latestShortenedQrDataUrl()!, 'short-url-qr.png')">
+            <mat-icon>download</mat-icon> Download PNG
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -109,6 +125,9 @@
               <button class="action-btn copy-btn" (click)="copyToClipboard(item.short_key)" title="Copy Link">
                 <mat-icon>content_copy</mat-icon>
               </button>
+              <button class="action-btn qr-btn" (click)="openQrPopup(item.short_key)" title="View QR Code">
+                <mat-icon>qr_code_2</mat-icon>
+              </button>
               <button class="action-btn navigate-btn" (click)="navigateToUrl(item.short_key)" title="Navigate">
                 <mat-icon>open_in_new</mat-icon>
               </button>
@@ -153,6 +172,33 @@
           <p>{{ searchText() ? 'No links match your search query.' : 'No links shortened yet. Paste a link above to get started!' }}</p>
         </div>
       </ng-template>
+    </div>
+  </div>
+</div>
+
+<!-- Popup Modal for QR Code -->
+<div class="modal-overlay" *ngIf="activePopupUrl()" (click)="closeQrPopup()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3 class="modal-title">QR Code Link</h3>
+      <button class="close-modal-btn" (click)="closeQrPopup()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-qr-wrapper" *ngIf="activePopupQrDataUrl(); else qrLoading">
+        <img [src]="activePopupQrDataUrl()" alt="QR Code" class="modal-qr-image" />
+        <span class="modal-qr-link">{{ activePopupUrl() }}</span>
+      </div>
+      <ng-template #qrLoading>
+        <div class="qr-spinner">Generating QR code...</div>
+      </ng-template>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn secondary-btn" (click)="closeQrPopup()">Close</button>
+      <button class="modal-btn primary-btn" *ngIf="activePopupQrDataUrl()" (click)="downloadQrCode(activePopupQrDataUrl()!, 'qr-code.png')">
+        <mat-icon>download</mat-icon> Download QR
+      </button>
     </div>
   </div>
 </div>
