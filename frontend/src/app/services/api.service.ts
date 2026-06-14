@@ -25,7 +25,7 @@ export class ApiService {
   shortenUrl(longUrl: string, alias?: string, ttlHours?: number): Observable<ShortenResponse> {
     const payload: any = { url: longUrl };
     if (alias) payload.alias = alias;
-    if (ttlHours) payload.ttl_hours = ttlHours;
+    if (ttlHours) payload.ttl_hours = Number(ttlHours);
     return this.http.post<ShortenResponse>(`${this.apiUrl}/shorten`, payload);
   }
 

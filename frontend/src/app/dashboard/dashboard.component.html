@@ -42,11 +42,11 @@
           [ngModel]="selectedTTL()" 
           (ngModelChange)="selectedTTL.set($event)" 
           class="field-select">
-          <option [value]="0">Link Expiration: Never</option>
-          <option [value]="1">1 Hour</option>
-          <option [value]="24">1 Day</option>
-          <option [value]="168">7 Days</option>
-          <option [value]="720">30 Days</option>
+          <option [ngValue]="0">Link Expiration: Never</option>
+          <option [ngValue]="1">1 Hour</option>
+          <option [ngValue]="24">1 Day</option>
+          <option [ngValue]="168">7 Days</option>
+          <option [ngValue]="720">30 Days</option>
         </select>
       </div>
     </div>
@@ -104,7 +104,7 @@
           <tr *ngFor="let item of paginatedUrls()">
             <td class="short-link-cell" data-label="Short Link">short.en/{{ item.short_key }}</td>
             <td class="original-url-cell" data-label="Original URL" title="{{ item.long_url }}">{{ item.long_url }}</td>
-            <td class="date-cell" data-label="Date">{{ item.created_at | date:'MMM d, yyyy' }}</td>
+            <td class="date-cell" data-label="Date">{{ item.created_at | date:'MMM d, yyyy, HH:mm:ss' }}</td>
             <td class="actions-cell" data-label="Actions">
               <button class="action-btn copy-btn" (click)="copyToClipboard(item.short_key)" title="Copy Link">
                 <mat-icon>content_copy</mat-icon>
