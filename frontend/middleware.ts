@@ -37,18 +37,18 @@ export default async function middleware(request: Request) {
       return Response.redirect(longUrl, 302);
     }
     
-    // Cache MISS: Rewrite to the Go backend
-    // The backend will query the DB, update the cache, and redirect.
+    // Cache MISS: Redirect to the Go backend
+    // The backend will query the DB, update the cache, and redirect the browser.
     const backendUrl = process.env['BACKEND_URL'] || 'https://url-shortener-backend.up.railway.app';
-    const rewriteUrl = new URL(`${backendUrl}/${key}`);
-    return fetch(new Request(rewriteUrl.toString(), request));
+    const redirectUrl = new URL(`${backendUrl}/${key}`);
+    return Response.redirect(redirectUrl.toString(), 302);
     
   } catch (error) {
     console.error('Redis error in edge middleware:', error);
-    // On redis error, fallback to Go backend
+    // On redis error, fallback by redirecting to the Go backend
     const backendUrl = process.env['BACKEND_URL'] || 'https://url-shortener-backend.up.railway.app';
-    const rewriteUrl = new URL(`${backendUrl}/${key}`);
-    return fetch(new Request(rewriteUrl.toString(), request));
+    const redirectUrl = new URL(`${backendUrl}/${key}`);
+    return Response.redirect(redirectUrl.toString(), 302);
   }
 }
 
