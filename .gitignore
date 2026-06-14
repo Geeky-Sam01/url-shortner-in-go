@@ -30,3 +30,6 @@ Thumbs.db
 # Worktrees
 .worktrees/
 worktrees/
+
+# Planning files
+docs/plans/
