@@ -23,6 +23,33 @@
         <mat-icon class="btn-icon">auto_awesome</mat-icon>
       </button>
     </div>
+
+    <!-- Advanced Options Drawer -->
+    <div class="advanced-options">
+      <div class="option-field">
+        <mat-icon class="field-icon">vpn_key</mat-icon>
+        <input 
+          type="text" 
+          [ngModel]="customAlias()" 
+          (ngModelChange)="customAlias.set($event)"
+          placeholder="Custom alias (optional, e.g. promo)" 
+          class="field-input"
+        />
+      </div>
+      <div class="option-field">
+        <mat-icon class="field-icon">schedule</mat-icon>
+        <select 
+          [ngModel]="selectedTTL()" 
+          (ngModelChange)="selectedTTL.set($event)" 
+          class="field-select">
+          <option [value]="0">Link Expiration: Never</option>
+          <option [value]="1">1 Hour</option>
+          <option [value]="24">1 Day</option>
+          <option [value]="168">7 Days</option>
+          <option [value]="720">30 Days</option>
+        </select>
+      </div>
+    </div>
   </div>
   
   <!-- Dynamic Shortened Result Pill -->

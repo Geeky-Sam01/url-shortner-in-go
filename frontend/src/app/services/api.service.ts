@@ -22,8 +22,11 @@ export class ApiService {
   private http = inject(HttpClient);
   private apiUrl = environment.apiUrl;
 
-  shortenUrl(longUrl: string): Observable<ShortenResponse> {
-    return this.http.post<ShortenResponse>(`${this.apiUrl}/shorten`, { url: longUrl });
+  shortenUrl(longUrl: string, alias?: string, ttlHours?: number): Observable<ShortenResponse> {
+    const payload: any = { url: longUrl };
+    if (alias) payload.alias = alias;
+    if (ttlHours) payload.ttl_hours = ttlHours;
+    return this.http.post<ShortenResponse>(`${this.apiUrl}/shorten`, payload);
   }
 
   getUrls(): Observable<UrlItem[]> {

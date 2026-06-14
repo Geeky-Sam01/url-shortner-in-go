@@ -27,6 +27,8 @@ export class DashboardComponent implements OnInit {
   isFocused = signal(false);
   recentUrls = signal<UrlItem[]>([]);
   latestShortenedUrl = signal<string | null>(null);
+  customAlias = signal('');
+  selectedTTL = signal(0);
 
   // Search and Pagination State
   searchText = signal('');
@@ -104,15 +106,18 @@ export class DashboardComponent implements OnInit {
     const urlVal = this.longUrl();
     if (!urlVal) return;
     this.loading.set(true);
-    this.api.shortenUrl(urlVal).subscribe({
+    this.api.shortenUrl(urlVal, this.customAlias(), this.selectedTTL()).subscribe({
       next: (res) => {
         this.longUrl.set('');
+        this.customAlias.set('');
+        this.selectedTTL.set(0);
         this.latestShortenedUrl.set(res.short_url);
         this.loadUrls();
         this.snackBar.open(`Shortened to: ${res.short_url}`, 'Close', { duration: 5000 });
       },
       error: (err) => {
-        this.snackBar.open('Error creating short URL', 'Close', { duration: 3000 });
+        const errorMsg = err.error?.error || 'Error creating short URL';
+        this.snackBar.open(errorMsg, 'Close', { duration: 4000 });
         console.error(err);
       },
       complete: () => this.loading.set(false)

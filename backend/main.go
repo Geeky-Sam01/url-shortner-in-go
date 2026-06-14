@@ -87,11 +87,31 @@ func main() {
 	}
 	router := gin.Default()
 
-	// Simple CORS middleware
+	// Dynamic CORS middleware supporting credentials and dynamic origin matching
+	var allowedOrigins []string
+	if cfg.FrontendURL != "" {
+		allowedOrigins = append(allowedOrigins, cfg.FrontendURL)
+	}
+	allowedOrigins = append(allowedOrigins, cfg.AllowedOrigins...)
+
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", cfg.FrontendURL)
+		origin := c.Request.Header.Get("Origin")
+		allowed := false
+		for _, o := range allowedOrigins {
+			if o == origin {
+				allowed = true
+				break
+			}
+		}
+		if allowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if len(allowedOrigins) > 0 && allowedOrigins[0] != "" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", allowedOrigins[0])
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

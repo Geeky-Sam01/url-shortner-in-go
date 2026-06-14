@@ -11,6 +11,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config holds every tunable the application needs.
@@ -29,17 +30,30 @@ type Config struct {
 
 	// FrontendURL is the origin allowed by CORS (e.g. "https://myapp.vercel.app").
 	FrontendURL string
+
+	// AllowedOrigins lists other origins that are allowed in CORS.
+	AllowedOrigins []string
 }
 
 // Load reads config from the environment and returns a validated Config.
 // It returns an error if any required variable is missing so the caller
 // can fail fast with a clear message.
 func Load() (*Config, error) {
+	var allowedOrigins []string
+	if originsEnv := os.Getenv("ALLOWED_ORIGINS"); originsEnv != "" {
+		for _, o := range strings.Split(originsEnv, ",") {
+			if trimmed := strings.TrimSpace(o); trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+
 	cfg := &Config{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
-		Port:        os.Getenv("PORT"),
-		FrontendURL: os.Getenv("FRONTEND_URL"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		RedisURL:       os.Getenv("REDIS_URL"),
+		Port:           os.Getenv("PORT"),
+		FrontendURL:    os.Getenv("FRONTEND_URL"),
+		AllowedOrigins: allowedOrigins,
 	}
 
 	// --- Defaults -----------------------------------------------------------

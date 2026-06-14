@@ -16,7 +16,7 @@ import (
 	"github.com/url-shortner/backend/utils"
 )
 
-func setupTestRouter(db sqlmock.Sqlmock, rClient *redis.Client) (*gin.Engine, *handlers.URLHandler, sqlmock.Sqlmock) {
+func setupTestRouter(rClient *redis.Client) (*gin.Engine, *handlers.URLHandler, sqlmock.Sqlmock) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 
@@ -39,7 +39,7 @@ func TestCreateURL(t *testing.T) {
 	defer mr.Close()
 	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	router, _, mock := setupTestRouter(nil, rClient)
+	router, _, mock := setupTestRouter(rClient)
 
 	// Mock sequence generation
 	mock.ExpectQuery(`SELECT nextval\('urls_id_seq'\)`).
@@ -50,7 +50,7 @@ func TestCreateURL(t *testing.T) {
 
 	// Mock insert
 	mock.ExpectExec(`INSERT INTO urls`).
-		WithArgs(int64(56800235584), expectedShortKey, "https://example.com").
+		WithArgs(int64(56800235584), expectedShortKey, "https://example.com", nil).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	reqBody := `{"url": "https://example.com"}`
@@ -83,15 +83,15 @@ func TestRedirectFallback(t *testing.T) {
 	defer mr.Close()
 	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	router, _, mock := setupTestRouter(nil, rClient)
+	router, _, mock := setupTestRouter(rClient)
 
 	// Test case 1: Cache miss, DB hit
 	shortKey := "abc1234"
 	longURL := "https://github.com"
 
-	mock.ExpectQuery(`SELECT id, long_url FROM urls WHERE short_key = \$1`).
+	mock.ExpectQuery(`SELECT id, long_url, expires_at FROM urls WHERE short_key = \$1`).
 		WithArgs(shortKey).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "long_url"}).AddRow(1, longURL))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "long_url", "expires_at"}).AddRow(1, longURL, nil))
 
 	req, _ := http.NewRequest(http.MethodGet, "/"+shortKey, nil)
 	w := httptest.NewRecorder()
@@ -123,7 +123,7 @@ func TestCreateURL_SelfReferential(t *testing.T) {
 	defer mr.Close()
 	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	router, _, _ := setupTestRouter(nil, rClient)
+	router, _, _ := setupTestRouter(rClient)
 
 	t.Run("API Host Check", func(t *testing.T) {
 		reqBody := `{"url": "http://localhost:8080/abc"}`
@@ -151,6 +151,45 @@ func TestCreateURL_SelfReferential(t *testing.T) {
 			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
 		}
 	})
+
+	t.Run("Loopback IP Check", func(t *testing.T) {
+		reqBody := `{"url": "http://127.0.0.1/metadata"}`
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("Metadata IP Check", func(t *testing.T) {
+		reqBody := `{"url": "http://169.254.169.254/latest/meta-data"}`
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("Private Subnet IP Check", func(t *testing.T) {
+		reqBody := `{"url": "http://192.168.1.50/admin"}`
+		req, _ := http.NewRequest(http.MethodPost, "/api/shorten", bytes.NewBufferString(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", w.Code, w.Body.String())
+		}
+	})
 }
 
 func TestCreateURL_RateLimit(t *testing.T) {
@@ -158,7 +197,7 @@ func TestCreateURL_RateLimit(t *testing.T) {
 	defer mr.Close()
 	rClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
-	router, _, _ := setupTestRouter(nil, rClient)
+	router, _, _ := setupTestRouter(rClient)
 
 	// Make 10 requests, all should get 400 Bad Request (not 429)
 	for i := 0; i < 10; i++ {
@@ -182,5 +221,69 @@ func TestCreateURL_RateLimit(t *testing.T) {
 		t.Errorf("expected 429 Too Many Requests on 11th request, got %d: %s", w.Code, w.Body.String())
 	}
 }
+func TestGetClientIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	t.Run("TRUSTED_IP_HEADER from env", func(t *testing.T) {
+		t.Setenv("TRUSTED_IP_HEADER", "CF-Connecting-IP")
+		
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("CF-Connecting-IP", "203.0.113.195, 70.41.3.18")
+		c.Request = req
 
+		ip := handlers.GetClientIP(c)
+		if ip != "203.0.113.195" {
+			t.Errorf("expected 203.0.113.195, got %s", ip)
+		}
+	})
+
+	t.Run("TRUSTED_IP_HEADER from request header fallback", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("TRUSTED_IP_HEADER", "X-Custom-IP")
+		req.Header.Set("X-Custom-IP", "198.51.100.1")
+		c.Request = req
+
+		ip := handlers.GetClientIP(c)
+		if ip != "198.51.100.1" {
+			t.Errorf("expected 198.51.100.1, got %s", ip)
+		}
+	})
+
+	t.Run("X-Real-IP header", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Real-IP", "198.51.100.42")
+		c.Request = req
+
+		ip := handlers.GetClientIP(c)
+		if ip != "198.51.100.42" {
+			t.Errorf("expected 198.51.100.42, got %s", ip)
+		}
+	})
+
+	t.Run("X-Forwarded-For header", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Forwarded-For", "198.51.100.99, 10.0.0.1")
+		c.Request = req
+
+		ip := handlers.GetClientIP(c)
+		if ip != "198.51.100.99" {
+			t.Errorf("expected 198.51.100.99, got %s", ip)
+		}
+	})
+
+	t.Run("c.ClientIP fallback", func(t *testing.T) {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.50:12345"
+		c.Request = req
+
+		ip := handlers.GetClientIP(c)
+		if ip != "203.0.113.50" {
+			t.Errorf("expected 203.0.113.50, got %s", ip)
+		}
+	})
+}

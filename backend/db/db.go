@@ -14,6 +14,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
+	"strconv"
+	"time"
 
 	// lib/pq registers itself as the "postgres" driver via its init() function.
 	// The blank import is the standard Go idiom for database drivers.
@@ -35,6 +38,39 @@ func Connect(databaseURL string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("db: ping failed: %w", err)
 	}
+
+	// Set connection pooling parameters
+	maxOpen := 25
+	if val := os.Getenv("DB_MAX_OPEN_CONNS"); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			maxOpen = parsed
+		}
+	}
+	db.SetMaxOpenConns(maxOpen)
+
+	maxIdle := 10
+	if val := os.Getenv("DB_MAX_IDLE_CONNS"); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			maxIdle = parsed
+		}
+	}
+	db.SetMaxIdleConns(maxIdle)
+
+	maxLifetime := 15 * time.Minute
+	if val := os.Getenv("DB_CONN_MAX_LIFETIME"); val != "" {
+		if parsed, err := time.ParseDuration(val); err == nil {
+			maxLifetime = parsed
+		}
+	}
+	db.SetConnMaxLifetime(maxLifetime)
+
+	maxIdleTime := 5 * time.Minute
+	if val := os.Getenv("DB_CONN_MAX_IDLE_TIME"); val != "" {
+		if parsed, err := time.ParseDuration(val); err == nil {
+			maxIdleTime = parsed
+		}
+	}
+	db.SetConnMaxIdleTime(maxIdleTime)
 
 	slog.Info("PostgreSQL connection established")
 	return db, nil
@@ -65,6 +101,18 @@ func RunMigrations(db *sql.DB) error {
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_urls_short_key ON urls(short_key);`)
 	if err != nil {
 		return fmt.Errorf("db: create idx_urls_short_key: %w", err)
+	}
+
+	// Add expires_at column to URLs table
+	_, err = db.Exec(`ALTER TABLE urls ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE;`)
+	if err != nil {
+		return fmt.Errorf("db: add expires_at column: %w", err)
+	}
+
+	// Index on expires_at for fast checks
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_urls_expires_at ON urls(expires_at);`)
+	if err != nil {
+		return fmt.Errorf("db: create idx_urls_expires_at: %w", err)
 	}
 
 	// ── clicks table ────────────────────────────────────────────────────────
