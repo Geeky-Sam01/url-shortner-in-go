@@ -103,10 +103,62 @@ export class DashboardComponent implements OnInit {
   }
 
   shorten() {
-    const urlVal = this.longUrl();
-    if (!urlVal) return;
+    const urlVal = this.longUrl() ? this.longUrl().trim() : '';
+    if (!urlVal) {
+      this.snackBar.open('Please enter a URL to shorten', 'Close', { duration: 3000 });
+      return;
+    }
+
+    // 1. URL validation
+    if (!urlVal.startsWith('http://') && !urlVal.startsWith('https://')) {
+      this.snackBar.open('URL must start with http:// or https://', 'Close', { duration: 3000 });
+      return;
+    }
+
+    try {
+      new URL(urlVal);
+    } catch (_) {
+      this.snackBar.open('Please enter a valid URL format', 'Close', { duration: 3000 });
+      return;
+    }
+
+    // 3. Prevent self-referential or loopback URL shortening on client side
+    let inputHost = '';
+    try {
+      inputHost = new URL(urlVal).hostname.toLowerCase();
+    } catch (_) {}
+
+    const currentHost = window.location.hostname.toLowerCase();
+    if (inputHost === currentHost || inputHost === 'localhost' || inputHost === '127.0.0.1' || inputHost === '::1') {
+      this.snackBar.open('Cannot shorten loopback, private, or self-referential URLs', 'Close', { duration: 4000 });
+      return;
+    }
+
+    // 2. Custom Alias validation
+    const aliasVal = this.customAlias() ? this.customAlias().trim() : '';
+    if (aliasVal) {
+      if (aliasVal.length < 3 || aliasVal.length > 15) {
+        this.snackBar.open('Alias must be between 3 and 15 characters long', 'Close', { duration: 3000 });
+        return;
+      }
+
+      const aliasRegex = /^[a-zA-Z0-9-_]+$/;
+      if (!aliasRegex.test(aliasVal)) {
+        this.snackBar.open('Alias can only contain alphanumeric characters, dashes, and underscores', 'Close', { duration: 3000 });
+        return;
+      }
+
+      const blacklist = new Set([
+        'api', 'health', 'dashboard', 'analytics', 'architecture', 'swagger', 'expired'
+      ]);
+      if (blacklist.has(aliasVal.toLowerCase())) {
+        this.snackBar.open('Alias is a reserved system route name', 'Close', { duration: 3000 });
+        return;
+      }
+    }
+
     this.loading.set(true);
-    this.api.shortenUrl(urlVal, this.customAlias(), this.selectedTTL()).subscribe({
+    this.api.shortenUrl(urlVal, aliasVal, this.selectedTTL()).subscribe({
       next: (res) => {
         this.longUrl.set('');
         this.customAlias.set('');
@@ -114,13 +166,14 @@ export class DashboardComponent implements OnInit {
         this.latestShortenedUrl.set(res.short_url);
         this.loadUrls();
         this.snackBar.open(`Shortened to: ${res.short_url}`, 'Close', { duration: 5000 });
+        this.loading.set(false);
       },
       error: (err) => {
         const errorMsg = err.error?.error || 'Error creating short URL';
         this.snackBar.open(errorMsg, 'Close', { duration: 4000 });
         console.error(err);
-      },
-      complete: () => this.loading.set(false)
+        this.loading.set(false);
+      }
     });
   }
 
