@@ -16,8 +16,8 @@ This project uses a modern distributed architecture, dividing responsibilities b
 
 1. **Ultra-Low Latency Redirects**: Vercel Edge Middleware intercepts short URLs and checks Upstash Redis directly from the edge. Cache hits return a 302 redirect instantly (sub-10ms) without hitting the backend.
 2. **High-Performance Go API**: The backend is written in Go using the Gin framework. It generates unique sequential IDs from PostgreSQL and uses a custom Base62 encoder to guarantee 100% collision-free short URLs.
-3. **Asynchronous Analytics**: Click events (referrer, user-agent, IP, country) are pushed to a Redis List queue. A background Go Goroutine batches and inserts them into PostgreSQL to prevent database locks and latency spikes during high traffic.
-4. **Resilient Failover & Requeueing**: If PostgreSQL transactions fail during batch insertions, the background analytics worker automatically requeues click events back to Upstash Redis (`RPush` pipeline) to prevent analytics data loss.
+3. **Resilient Hybrid Analytics Queue**: Click events (referrer, user-agent, IP, country) are buffered instantly in local, thread-safe Go channels. A background worker drains the channel: pushing to Upstash Redis in batches of 100 to optimize Redis command limits by 100x under heavy traffic, or writing them directly to PostgreSQL if traffic is low.
+4. **Outage Resiliency & Soft Failovers**: If Upstash Redis is rate-limited or offline, the local analytics worker automatically falls back to direct batch PostgreSQL writes, preventing any analytics data loss. Additionally, rate-limiting on the `/api/shorten` endpoint gracefully degrades to bypass Redis checks during outages, avoiding total service downtime.
 5. **Graceful Shutdown**: The Go backend implements graceful shutdown on `SIGINT` or `SIGTERM`, draining pending HTTP requests (with a 5-second timeout) and safely stopping background workers.
 6. **Sleek Angular Dashboard**: A clean, single-page Angular Material UI to generate new short URLs and view recently created ones.
 
